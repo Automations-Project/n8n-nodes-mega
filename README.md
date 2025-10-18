@@ -5,7 +5,7 @@
 [![n8n community node](https://img.shields.io/badge/n8n-community%20node-orange)](https://docs.n8n.io/integrations/community-nodes/)
 [![S3 compatible](https://img.shields.io/badge/S3-compatible-569A31)](https://docs.aws.amazon.com/AmazonS3/latest/API/)
 [![Mega S4](https://img.shields.io/badge/Mega-S4-d9272e)](https://mega.io/s4)
-[![n8n Nodes API](https://img.shields.io/badge/n8n%20Nodes%20API-v1-blue)](#)
+[![n8n Nodes API](https://img.shields.io/badge/n8n%20Nodes%20API-v1-blue)](#contributing)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![npm version](https://img.shields.io/npm/v/@nskha/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/@nskha/n8n-nodes-mega)
 [![npm downloads](https://img.shields.io/npm/dm/@nskha/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/@nskha/n8n-nodes-mega)
