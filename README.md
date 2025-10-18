@@ -1,4 +1,4 @@
-![n8n.io - Workflow Automation](https://github.com/Automations-Project/n8n-nodes-mega/raw/master/intro.png)
+[![n8n.io - Workflow Automation](https://github.com/Automations-Project/n8n-nodes-mega/raw/master/intro.png)](https://youtu.be/eJNwNlH1Xoc)
 # Mega n8n Node
 [![CI](https://github.com/Automations-Project/n8n-nodes-mega/actions/workflows/ci.yml/badge.svg)](https://github.com/Automations-Project/n8n-nodes-mega/actions/workflows/ci.yml)
 
@@ -55,6 +55,8 @@ This is an n8n community node for **Mega.nz S4** object storage service. It prov
 - ℹ️ All objects use STANDARD storage class (Mega S4 default)
 
 ## Installation
+
+> 📺 **Prefer video?** Watch our [step-by-step installation tutorial](https://youtu.be/eJNwNlH1Xoc)
 
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
 ### npm
