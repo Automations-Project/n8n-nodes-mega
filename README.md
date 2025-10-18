@@ -7,13 +7,13 @@
 [![Mega S4](https://img.shields.io/badge/Mega-S4-d9272e)](https://mega.io/s4)
 [![n8n Nodes API](https://img.shields.io/badge/n8n%20Nodes%20API-v1-blue)](#)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
-[![npm version](https://img.shields.io/npm/v/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/n8n-nodes-mega)
-[![npm downloads](https://img.shields.io/npm/dm/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/n8n-nodes-mega)
+[![npm version](https://img.shields.io/npm/v/@nskha/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/@nskha/n8n-nodes-mega)
+[![npm downloads](https://img.shields.io/npm/dm/@nskha/n8n-nodes-mega?logo=npm)](https://www.npmjs.com/package/@nskha/n8n-nodes-mega)
 [![n8n Node version](https://img.shields.io/github/package-json/v/Automations-Project/n8n-nodes-mega?logo=n8n&label=n8n%20node)](https://github.com/Automations-Project/n8n-nodes-mega)
 [![n8n compatibility](https://img.shields.io/github/v/release/n8n-io/n8n?logo=n8n&label=)](https://n8n.io)
 [![Node.js compatibility](https://img.shields.io/badge/Node.js-%E2%89%A518.17.0-green?logo=node.js)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6%2B-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Dependencies](https://img.shields.io/librariesio/release/npm/n8n-nodes-mega?logo=dependabot)](https://libraries.io/npm/n8n-nodes-mega)
+[![Dependencies](https://img.shields.io/librariesio/release/npm/@nskha/n8n-nodes-mega?logo=dependabot)](https://libraries.io/npm/@nskha/n8n-nodes-mega)
 [![License](https://img.shields.io/github/license/Automations-Project/n8n-nodes-mega)](LICENSE.md)
 
 [![GitHub stars](https://img.shields.io/github/stars/Automations-Project/n8n-nodes-mega?style=social)](https://github.com/Automations-Project/n8n-nodes-mega/stargazers)
@@ -59,7 +59,7 @@ This is an n8n community node for **Mega.nz S4** object storage service. It prov
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
 ### npm
 ```bash
-npm install n8n-nodes-mega
+npm install @nskha/n8n-nodes-mega
 ```
 
 ### n8n Cloud & Self-Hosted

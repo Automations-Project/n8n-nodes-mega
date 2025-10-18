@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-mega",
+  "name": "@nskha/n8n-nodes-mega",
   "version": "1.0.0",
   "description": "n8n community node for Mega.nz S4 object storage (S3-compatible)",
   "keywords": [

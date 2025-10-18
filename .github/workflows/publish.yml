@@ -223,14 +223,14 @@ jobs:
           pnpm publish --access public --provenance --no-git-checks
 
           echo "✅ Successfully published to NPM"
-          echo "📦 Package: https://www.npmjs.com/package/n8n-nodes-mega"
+          echo "📦 Package: https://www.npmjs.com/package/@nskha/n8n-nodes-mega"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Verify NPM publication
         run: |
           sleep 10
-          NPM_VERSION=$(npm view n8n-nodes-mega version)
+          NPM_VERSION=$(npm view @nskha/n8n-nodes-mega version)
           if [ "$NPM_VERSION" = "${{ needs.validate.outputs.new-version }}" ]; then
             echo "✅ NPM publication verified: v$NPM_VERSION"
           else
@@ -343,7 +343,7 @@ jobs:
 
           **NPM:**
           ```bash
-          npm install n8n-nodes-mega
+          npm install @nskha/n8n-nodes-mega
           ```
 
           **n8n Cloud/Self-Hosted:**
@@ -351,7 +351,7 @@ jobs:
 
           ### 📍 Package Locations
 
-          - **NPM Registry:** [npmjs.com/package/n8n-nodes-mega](https://www.npmjs.com/package/n8n-nodes-mega)
+          - **NPM Registry:** [npmjs.com/package/@nskha/n8n-nodes-mega](https://www.npmjs.com/package/@nskha/n8n-nodes-mega)
           - **GitHub Packages:** [@automations-project/n8n-nodes-mega](https://github.com/Automations-Project/n8n-nodes-mega/packages)
 
           ### 📚 Documentation
@@ -392,13 +392,13 @@ jobs:
           echo "### Version: v${{ needs.validate.outputs.new-version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Published to:" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ NPM Registry: https://www.npmjs.com/package/n8n-nodes-mega" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NPM Registry: https://www.npmjs.com/package/@nskha/n8n-nodes-mega" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ GitHub Packages: https://github.com/Automations-Project/n8n-nodes-mega/packages" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ GitHub Release: https://github.com/Automations-Project/n8n-nodes-mega/releases/tag/v${{ needs.validate.outputs.new-version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Install command:" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "npm install n8n-nodes-mega" >> $GITHUB_STEP_SUMMARY
+          echo "npm install @nskha/n8n-nodes-mega" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
   notify-failure:
