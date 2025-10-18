@@ -1,4 +1,4 @@
-![n8n.io - Workflow Automation](/intro.png)
+![n8n.io - Workflow Automation](https://github.com/Automations-Project/n8n-nodes-mega/raw/master/intro.png)
 # Mega n8n Node
 [![CI](https://github.com/Automations-Project/n8n-nodes-mega/actions/workflows/ci.yml/badge.svg)](https://github.com/Automations-Project/n8n-nodes-mega/actions/workflows/ci.yml)
 
