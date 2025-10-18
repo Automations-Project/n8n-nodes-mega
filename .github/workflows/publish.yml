@@ -77,8 +77,20 @@ jobs:
         id: version
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          echo "Current version: $CURRENT_VERSION"
+          echo "Current version in package.json: $CURRENT_VERSION"
 
+          # Check what's already published on NPM
+          NPM_VERSION=$(npm view @nskha/n8n-nodes-mega version 2>/dev/null || echo "0.0.0")
+          echo "Latest version on NPM: $NPM_VERSION"
+
+          # Use the higher version as base (NPM or local)
+          if [ "$NPM_VERSION" != "0.0.0" ]; then
+            # NPM has a published version, use it as base
+            echo "Using NPM version as base for bump"
+            npm version $NPM_VERSION --no-git-tag-version --allow-same-version
+          fi
+
+          # Now bump from the correct base
           if [ "${{ inputs.version-bump }}" = "prerelease" ]; then
             NEW_VERSION=$(npm version prerelease --preid=${{ inputs.prerelease-tag }} --no-git-tag-version)
           else
@@ -95,7 +107,7 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Version bumped successfully to $NEW_VERSION"
+          echo "✅ Version bumped successfully: $NPM_VERSION → $NEW_VERSION"
 
       - name: Verify package structure for n8n
         run: |
