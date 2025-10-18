@@ -33,7 +33,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run build && eslint -c .eslintrc.prepublish.js nodes credentials package.json",
+    "prepublishOnly": "pnpm run build && eslint -c .eslintrc.prepublish.js nodes credentials package.json",
     "start:dev": "pnpm build && mkdir -p ~/.n8n/custom/n8n-nodes-mega && cp -r dist package.json ~/.n8n/custom/n8n-nodes-mega/ && N8N_CUSTOM_EXTENSIONS=~/.n8n/custom n8n start",
     "start:dev-windows": "pnpm run build && node scripts/setup-dev-windows.js",
     "start:dev-windows:watch": "pnpm run build && node scripts/setup-dev-windows.js --start-only --no-logs && concurrently --kill-others-on-fail --names ts,watch,logs \"tsc --watch --preserveWatchOutput\" \"node scripts/watch-n8n.js\" \"pm2 logs n8n-dev\"",
