@@ -147,10 +147,10 @@ jobs:
         run: pnpm run prepublishOnly
         continue-on-error: false
 
-      - name: Test package installation (dry-run)
+      - name: Test package installation
         run: |
           mkdir -p /tmp/test-install
-          pnpm pack --dry-run
+          pnpm pack --pack-destination /tmp/test-install
           echo "✅ Package can be packed successfully"
 
       - name: Determine if should publish
