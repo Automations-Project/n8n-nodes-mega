@@ -69,3 +69,6 @@ DEV-WORKFLOW.md
 .env
 scripts/banner.config
 scripts/banner.config.json
+/.github/PUBLISH_QUICK_START.md
+/.github/PUBLISHING.md
+/.github/README.md
