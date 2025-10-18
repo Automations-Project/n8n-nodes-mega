@@ -194,12 +194,21 @@ jobs:
         with:
           name: build-artifacts
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js for NPM
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
           scope: '@nskha'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Verify NPM authentication
         run: npm whoami
@@ -211,7 +220,7 @@ jobs:
           echo "Publishing version ${{ needs.validate.outputs.new-version }} to NPM..."
           
           # Publish with provenance for security
-          npm publish --access public --provenance
+          pnpm publish --access public --provenance
           
           echo "✅ Successfully published to NPM"
           echo "📦 Package: https://www.npmjs.com/package/n8n-nodes-mega"
@@ -249,12 +258,21 @@ jobs:
         with:
           name: build-artifacts
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js for GitHub Packages
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@automations-project'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Prepare package for GitHub Packages
         run: |
@@ -276,7 +294,7 @@ jobs:
         run: |
           echo "Publishing version ${{ needs.validate.outputs.new-version }} to GitHub Packages..."
           
-          npm publish --provenance
+          pnpm publish --provenance
           
           echo "✅ Successfully published to GitHub Packages"
           echo "📦 Package: https://github.com/Automations-Project/n8n-nodes-mega/packages"
@@ -306,7 +324,7 @@ jobs:
 
       - name: Commit version bump
         run: |
-          git add package.json package-lock.json
+          git add package.json pnpm-lock.yaml
           git commit -m "chore: bump version to v${{ needs.validate.outputs.new-version }}" || echo "No changes to commit"
           git push origin master || echo "Nothing to push"
 
