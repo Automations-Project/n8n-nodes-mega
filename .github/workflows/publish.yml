@@ -150,7 +150,7 @@ jobs:
       - name: Test package installation (dry-run)
         run: |
           mkdir -p /tmp/test-install
-          npm pack --dry-run
+          pnpm pack --dry-run
           echo "✅ Package can be packed successfully"
 
       - name: Determine if should publish
