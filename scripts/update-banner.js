@@ -1,18 +1,27 @@
 /*
  * Update README banner by calling a configurable template service (`templateId = n8n-node`).
  * - Auto-derives values from package.json and first *.node.ts file under nodes/
- * - Allows overrides via scripts/banner.config.json
+ * - Auto-bumps version from NPM (checks latest published, increments prerelease)
+ * - Allows overrides via scripts/banner.config.json or scripts/banner.config
  * - Saves to repo root as intro.png so README keeps working
+ * - Updates banner.config with the new version for future runs
  *
  * Configure the banner API base **locally** via the `BANNER_API_BASE_URL` (or `BANNER_API_BASE`)
  * environment variable, or by adding `bannerApiBase` to `scripts/banner.config*` (keep that file
  * out of version control). No default is shipped to avoid leaking private endpoints.
+ *
+ * Version auto-bumping:
+ * - If config.version is set, uses that value (manual override)
+ * - Otherwise, checks NPM for latest published version
+ * - Auto-increments prerelease (e.g., 1.0.1-beta.1 -> 1.0.1-beta.2)
+ * - Updates banner.config with the new version
  *
  * Usage: npm run update:banner
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { execSync } = require('node:child_process');
 
 // Load .env file if present (simple implementation, no dependencies)
 function loadEnv() {
@@ -44,6 +53,102 @@ function loadEnv() {
 }
 
 loadEnv();
+
+/**
+ * Auto-detect the latest published version on NPM and auto-increment it.
+ * Returns the next version to display in the banner.
+ */
+function getNextVersion(pkg, config) {
+  try {
+    // If version is explicitly set in config, use it
+    if (config.version) {
+      console.log(`[update-banner] Using version from config: ${config.version}`);
+      return config.version;
+    }
+
+    const packageName = config.packageName || pkg.name;
+    if (!packageName) {
+      console.warn('[update-banner] No package name found, using version from package.json');
+      return pkg.version || '1.0.0';
+    }
+
+    console.log(`[update-banner] Checking NPM for latest version of ${packageName}...`);
+    
+    // Check NPM for latest published version
+    let npmVersion;
+    try {
+      const result = execSync(`npm view ${packageName} version`, { 
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      }).trim();
+      npmVersion = result || pkg.version;
+    } catch (err) {
+      // Package not published yet or error
+      console.log('[update-banner] Package not found on NPM, using package.json version');
+      npmVersion = pkg.version || '1.0.0';
+    }
+
+    console.log(`[update-banner] Latest published: ${npmVersion}`);
+    console.log(`[update-banner] Package.json: ${pkg.version}`);
+
+    // Use the higher version (NPM or package.json)
+    const useVersion = compareVersions(npmVersion, pkg.version) > 0 ? npmVersion : pkg.version;
+    
+    // Auto-increment prerelease
+    const nextVersion = bumpPrerelease(useVersion, 'beta');
+    console.log(`[update-banner] Next version for banner: ${nextVersion}`);
+    
+    return nextVersion;
+  } catch (err) {
+    console.warn(`[update-banner] Error auto-bumping version: ${err.message}`);
+    return pkg.version || '1.0.0';
+  }
+}
+
+/**
+ * Simple semver comparison (-1: a < b, 0: a == b, 1: a > b)
+ */
+function compareVersions(a, b) {
+  const aParts = a.split(/[.-]/).map(p => isNaN(p) ? p : parseInt(p, 10));
+  const bParts = b.split(/[.-]/).map(p => isNaN(p) ? p : parseInt(p, 10));
+  
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aVal = aParts[i] || 0;
+    const bVal = bParts[i] || 0;
+    
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      if (aVal > bVal) return 1;
+      if (aVal < bVal) return -1;
+    } else {
+      const aStr = String(aVal);
+      const bStr = String(bVal);
+      if (aStr > bStr) return 1;
+      if (aStr < bStr) return -1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Bump prerelease version (e.g., 1.0.1-beta.0 -> 1.0.1-beta.1)
+ */
+function bumpPrerelease(version, tag = 'beta') {
+  const match = version.match(/^(\d+\.\d+\.\d+)(?:-([a-z]+)\.(\d+))?$/i);
+  
+  if (match) {
+    const [, base, currentTag, num] = match;
+    if (currentTag && currentTag.toLowerCase() === tag.toLowerCase()) {
+      // Increment existing prerelease
+      return `${base}-${tag}.${parseInt(num, 10) + 1}`;
+    } else {
+      // Start new prerelease
+      return `${base}-${tag}.0`;
+    }
+  }
+  
+  // Fallback: append -beta.0
+  return `${version}-${tag}.0`;
+}
 
 (async function main() {
   try {
@@ -82,7 +187,9 @@ loadEnv();
 
     const nodeName = config.nodeName || nodeMeta.displayName || toTitleCase(pkg.name.replace(/^@.*\//, ''));
     const description = config.description || nodeMeta.description || pkg.description || 'n8n community node';
-    const version = config.version || pkg.version || '1.0.0';
+    
+    // Auto-bump version from NPM or use config override
+    const version = getNextVersion(pkg, config);
 
     const nodeLogo = config.nodeLogo || resolveNodeLogoUrl(root, owner, repo, nodeMeta.iconDirRelative);
     if (config.nodeLogo && /\.svg(\?|$)/i.test(String(config.nodeLogo))) {
@@ -204,6 +311,17 @@ loadEnv();
     const outPath = path.join(root, 'intro.png');
     fs.writeFileSync(outPath, buf);
     console.log(`[update-banner] Saved ${path.relative(root, outPath)} (${buf.length} bytes)`);
+
+    // Update banner.config with the new version (if not explicitly set)
+    if (usedConfigPath && !config.version) {
+      try {
+        config.version = version;
+        fs.writeFileSync(usedConfigPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+        console.log(`[update-banner] Updated ${path.basename(usedConfigPath)} with version: ${version}`);
+      } catch (err) {
+        console.warn(`[update-banner] Could not update config file: ${err.message}`);
+      }
+    }
 
     // Optional: ensure README references /intro.png
     const readmePath = path.join(root, 'README.md');
