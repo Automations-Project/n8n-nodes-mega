@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-mega.mega",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Data & Storage"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://mega.io/s4"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://mega.io/s4"
+			}
+		]
+	},
+	"alias": ["s3", "storage", "cloud", "mega.nz", "object storage", "file storage"]
+}

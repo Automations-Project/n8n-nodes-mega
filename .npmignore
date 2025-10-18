@@ -1,0 +1,43 @@
+# Source files (only dist is needed)
+credentials/
+nodes/
+scripts/
+
+# Config & build files
+tsconfig.json
+gulpfile.js
+.eslintrc.js
+.eslintrc.prepublish.js
+.prettierrc.js
+.editorconfig
+
+# Development files
+dev-docs/
+research-files/
+structure_exports/
+.n8n-docs/
+.windsurf/
+ecosystem.config.js
+pnpm-workspace.yaml
+
+# IDE files
+.idea/
+.vscode/
+.junie/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# Tests (if added in future)
+test/
+*.test.ts
+*.spec.ts
