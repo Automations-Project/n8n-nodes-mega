@@ -30,8 +30,17 @@ permissions:
   id-token: write
 
 jobs:
+  skip-non-manual:
+    name: Skip non-manual triggers
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip publish (manual only)
+        run: echo "Publish workflow runs only via manual dispatch (workflow_dispatch). Skipping for event: ${{ github.event_name }}."
+
   validate:
     name: Validate & Prepare
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
       new-version: ${{ steps.version.outputs.new-version }}
