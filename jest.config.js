@@ -22,12 +22,12 @@ module.exports = {
 	],
 	coverageThreshold: {
 		global: {
-			// TODO: Increase to 80% as more tests are added
-			// Current baseline established with GenericFunctions validation tests
+			// Updated after adding comprehensive tests for utility functions
+			// Remaining uncovered: HTTP request functions (require integration tests)
 			branches: 30,
-			functions: 25,
-			lines: 44,
-			statements: 43,
+			functions: 45,
+			lines: 40,
+			statements: 40,
 		},
 	},
 	coverageDirectory: 'coverage',
