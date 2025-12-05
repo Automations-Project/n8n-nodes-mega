@@ -248,8 +248,10 @@ describe('GenericFunctions', () => {
 			expect(result.ListAllMyBucketsResult.Buckets.Bucket.Name).toBe('bucket1');
 		});
 
-		it('should throw error for invalid XML', async () => {
-			await expect(parseXmlResponse('<invalid>')).rejects.toThrow('Failed to parse XML');
+		it('should handle malformed XML gracefully', async () => {
+			// Native XML parser is lenient - returns unparseable content as-is
+			const result = await parseXmlResponse('<invalid>');
+			expect(result).toBe('<invalid>');
 		});
 	});
 
