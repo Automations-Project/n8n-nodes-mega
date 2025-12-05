@@ -143,8 +143,11 @@ jobs:
           echo "✅ Package structure validated for n8n community node"
 
       - name: Update README banner
-        if: ${{ secrets.BANNER_API_BASE_URL != '' }}
         run: |
+          if [ -z "$BANNER_API_BASE_URL" ]; then
+            echo "⚠️ BANNER_API_BASE_URL not set, skipping banner update"
+            exit 0
+          fi
           echo "📸 Regenerating banner with version ${{ steps.version.outputs.new-version }}..."
           npm run update:banner || echo "⚠️ Banner update failed (non-blocking)"
           if [ -f "intro.png" ]; then
