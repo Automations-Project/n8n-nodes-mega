@@ -1,7 +1,7 @@
 /**
  * Generic helper functions for Mega S4 (S3-compatible) API operations
- * Uses aws4 for AWS Signature V4 signing and xml2js for XML parsing
- * No external AWS SDK dependencies (n8n Cloud compatible)
+ * Uses native crypto for AWS Signature V4 signing and regex-based XML parsing
+ * Zero external dependencies - n8n Cloud compatible
  */
 
 import {
@@ -14,9 +14,293 @@ import {
 	JsonObject,
 } from 'n8n-workflow';
 import { IMegaCredentials } from './interfaces';
-import { sign } from 'aws4';
-import { parseStringPromise, Builder } from 'xml2js';
 import { createHash, createHmac } from 'crypto';
+
+// ============================================================================
+// Native AWS Signature V4 Implementation
+// ============================================================================
+
+interface ISignOptions {
+	host: string;
+	path: string;
+	method: string;
+	service: string;
+	region: string;
+	headers: Record<string, string>;
+	body?: string | Buffer;
+}
+
+interface IAwsCredentials {
+	accessKeyId: string;
+	secretAccessKey: string;
+}
+
+interface ISignedRequest {
+	headers: Record<string, string>;
+}
+
+/**
+ * Format date as AWS AMZ date format (YYYYMMDDTHHMMSSZ)
+ */
+function formatAmzDate(date: Date): string {
+	return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+/**
+ * Calculate SHA256 hash
+ */
+function sha256(data: string | Buffer): string {
+	return createHash('sha256').update(data).digest('hex');
+}
+
+/**
+ * Calculate HMAC-SHA256
+ */
+function hmacSha256(key: Buffer | string, data: string): Buffer {
+	return createHmac('sha256', key).update(data).digest();
+}
+
+/**
+ * Generate AWS4 signing key
+ */
+function getSigningKey(
+	secretKey: string,
+	dateStamp: string,
+	regionName: string,
+	serviceName: string,
+): Buffer {
+	const kDate = hmacSha256(`AWS4${secretKey}`, dateStamp);
+	const kRegion = hmacSha256(kDate, regionName);
+	const kService = hmacSha256(kRegion, serviceName);
+	const kSigning = hmacSha256(kService, 'aws4_request');
+	return kSigning;
+}
+
+/**
+ * URI encode a string according to AWS requirements
+ */
+function uriEncode(str: string, encodeSlash: boolean = true): string {
+	let encoded = '';
+	for (const char of str) {
+		if (
+			(char >= 'A' && char <= 'Z') ||
+			(char >= 'a' && char <= 'z') ||
+			(char >= '0' && char <= '9') ||
+			char === '_' ||
+			char === '-' ||
+			char === '~' ||
+			char === '.'
+		) {
+			encoded += char;
+		} else if (char === '/' && !encodeSlash) {
+			encoded += char;
+		} else {
+			encoded += '%' + char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0');
+		}
+	}
+	return encoded;
+}
+
+/**
+ * Sign an AWS request using Signature Version 4
+ * Native implementation without aws4 dependency
+ */
+function signAwsRequest(options: ISignOptions, credentials: IAwsCredentials): ISignedRequest {
+	const now = new Date();
+	const amzDate = formatAmzDate(now);
+	const dateStamp = amzDate.substring(0, 8);
+
+	// Prepare headers with required AWS headers
+	const headers: Record<string, string> = { ...options.headers };
+	headers['host'] = options.host;
+	headers['x-amz-date'] = amzDate;
+
+	// Calculate content hash
+	const payloadHash = options.body ? sha256(options.body) : sha256('');
+	headers['x-amz-content-sha256'] = payloadHash;
+
+	// Build canonical headers (sorted, lowercase)
+	const sortedHeaderKeys = Object.keys(headers)
+		.map((k) => k.toLowerCase())
+		.sort();
+	const canonicalHeaders = sortedHeaderKeys
+		.map((key) => `${key}:${headers[Object.keys(headers).find((k) => k.toLowerCase() === key)!].trim()}`)
+		.join('\n') + '\n';
+	const signedHeaders = sortedHeaderKeys.join(';');
+
+	// Parse path and query string
+	let canonicalUri = options.path;
+	let canonicalQueryString = '';
+	const queryIndex = options.path.indexOf('?');
+	if (queryIndex !== -1) {
+		canonicalUri = options.path.substring(0, queryIndex);
+		const queryString = options.path.substring(queryIndex + 1);
+		// Parse and sort query parameters
+		const params = new URLSearchParams(queryString);
+		const sortedParams: string[] = [];
+		params.forEach((value, key) => {
+			sortedParams.push(`${uriEncode(key)}=${uriEncode(value)}`);
+		});
+		sortedParams.sort();
+		canonicalQueryString = sortedParams.join('&');
+	}
+
+	// Build canonical request
+	const canonicalRequest = [
+		options.method,
+		uriEncode(canonicalUri, false),
+		canonicalQueryString,
+		canonicalHeaders,
+		signedHeaders,
+		payloadHash,
+	].join('\n');
+
+	// Build string to sign
+	const credentialScope = `${dateStamp}/${options.region}/${options.service}/aws4_request`;
+	const stringToSign = [
+		'AWS4-HMAC-SHA256',
+		amzDate,
+		credentialScope,
+		sha256(canonicalRequest),
+	].join('\n');
+
+	// Calculate signature
+	const signingKey = getSigningKey(
+		credentials.secretAccessKey,
+		dateStamp,
+		options.region,
+		options.service,
+	);
+	const signature = createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+
+	// Build authorization header
+	const authorization = `AWS4-HMAC-SHA256 Credential=${credentials.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+	headers['authorization'] = authorization;
+
+	// Return headers with proper casing
+	const resultHeaders: Record<string, string> = {};
+	for (const key of Object.keys(headers)) {
+		resultHeaders[key] = headers[key];
+	}
+
+	return { headers: resultHeaders };
+}
+
+// ============================================================================
+// Native XML Parsing Implementation
+// ============================================================================
+
+/**
+ * Parse XML string to JavaScript object
+ * Simple regex-based parser for S3/IAM XML responses
+ */
+function parseXmlToObject(xml: string): any {
+	if (!xml || xml.trim() === '') {
+		return {};
+	}
+
+	// Remove XML declaration
+	xml = xml.replace(/<\?xml[^?]*\?>/g, '').trim();
+
+	// Parse XML recursively
+	function parseNode(str: string): any {
+		const result: any = {};
+		
+		// Match tags and their content
+		const tagRegex = /<([a-zA-Z0-9_:-]+)([^>]*)>([\s\S]*?)<\/\1>/g;
+		const selfClosingRegex = /<([a-zA-Z0-9_:-]+)([^>]*)\/>/g;
+		
+		let match;
+		let hasChildren = false;
+		
+		// Handle self-closing tags
+		while ((match = selfClosingRegex.exec(str)) !== null) {
+			hasChildren = true;
+			const tagName = match[1];
+			if (result[tagName] === undefined) {
+				result[tagName] = '';
+			} else if (!Array.isArray(result[tagName])) {
+				result[tagName] = [result[tagName], ''];
+			} else {
+				result[tagName].push('');
+			}
+		}
+		
+		// Handle regular tags
+		while ((match = tagRegex.exec(str)) !== null) {
+			hasChildren = true;
+			const tagName = match[1];
+			const content = match[3].trim();
+			
+			// Check if content has nested tags
+			const hasNestedTags = /<[a-zA-Z0-9_:-]+[^>]*>/.test(content);
+			
+			let value: any;
+			if (hasNestedTags) {
+				value = parseNode(content);
+			} else {
+				// Decode XML entities
+				value = content
+					.replace(/&lt;/g, '<')
+					.replace(/&gt;/g, '>')
+					.replace(/&amp;/g, '&')
+					.replace(/&quot;/g, '"')
+					.replace(/&apos;/g, "'");
+			}
+			
+			// Handle multiple same-named tags as array
+			if (result[tagName] === undefined) {
+				result[tagName] = value;
+			} else if (!Array.isArray(result[tagName])) {
+				result[tagName] = [result[tagName], value];
+			} else {
+				result[tagName].push(value);
+			}
+		}
+		
+		return hasChildren ? result : str;
+	}
+
+	return parseNode(xml);
+}
+
+/**
+ * Build XML string from JavaScript object
+ * Simple builder for S3 request bodies
+ */
+function buildXmlFromObject(obj: any, rootName: string = 'root'): string {
+	function buildNode(data: any, nodeName: string): string {
+		if (data === null || data === undefined) {
+			return `<${nodeName}/>`;
+		}
+		
+		if (typeof data !== 'object') {
+			// Encode XML entities
+			const encoded = String(data)
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&apos;');
+			return `<${nodeName}>${encoded}</${nodeName}>`;
+		}
+		
+		if (Array.isArray(data)) {
+			return data.map((item) => buildNode(item, nodeName)).join('');
+		}
+		
+		// Object - build nested tags
+		let content = '';
+		for (const [key, value] of Object.entries(data)) {
+			if (key.startsWith('@')) continue; // Skip attributes for simplicity
+			content += buildNode(value, key);
+		}
+		return `<${nodeName}>${content}</${nodeName}>`;
+	}
+
+	const xml = buildNode(obj, rootName);
+	return `<?xml version="1.0" encoding="UTF-8"?>${xml}`;
+}
 
 // ============================================================================
 // Endpoint Configuration
@@ -154,8 +438,8 @@ export async function s3ApiRequest(
 		}
 	}
 
-	// Sign the request using aws4
-	const signedRequest = sign(
+	// Sign the request using native AWS Sig v4
+	const signedRequest = signAwsRequest(
 		{
 			host: endpoint,
 			path: fullPath,
@@ -323,8 +607,8 @@ export async function iamApiRequest(
 		'Content-Length': String(Buffer.byteLength(body, 'utf8')),
 	};
 
-	// Sign the request using aws4
-	const signedRequest = sign(
+	// Sign the request using native AWS Sig v4
+	const signedRequest = signAwsRequest(
 		{
 			host: endpoint,
 			path: '/',
@@ -423,12 +707,7 @@ export async function parseXmlResponse(xml: string): Promise<any> {
 	}
 
 	try {
-		const result = await parseStringPromise(xml, {
-			explicitArray: false,
-			ignoreAttrs: true,
-			tagNameProcessors: [(name: string) => name],
-		});
-		return result;
+		return parseXmlToObject(xml);
 	} catch (error: any) {
 		throw new Error(`Failed to parse XML response: ${error.message}`);
 	}
@@ -438,12 +717,7 @@ export async function parseXmlResponse(xml: string): Promise<any> {
  * Build XML from JavaScript object
  */
 export function buildXml(obj: any, rootName: string = 'root'): string {
-	const builder = new Builder({
-		rootName,
-		headless: false,
-		renderOpts: { pretty: false },
-	});
-	return builder.buildObject(obj);
+	return buildXmlFromObject(obj, rootName);
 }
 
 // ============================================================================
@@ -530,7 +804,7 @@ export async function generatePresignedUrl(
 	].join('\n');
 
 	// Calculate signature
-	const signingKey = getSignatureKey(
+	const signingKey = getSigningKey(
 		credentials.secretAccessKey,
 		dateStamp,
 		region,
@@ -544,24 +818,6 @@ export async function generatePresignedUrl(
 	const presignedUrl = `https://${endpoint}${path}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 
 	return presignedUrl;
-}
-
-/**
- * Generate AWS4 signing key
- */
-function getSignatureKey(
-	secretKey: string,
-	dateStamp: string,
-	regionName: string,
-	serviceName: string,
-): Buffer {
-	const kDate = createHmac('sha256', `AWS4${secretKey}`)
-		.update(dateStamp)
-		.digest();
-	const kRegion = createHmac('sha256', kDate).update(regionName).digest();
-	const kService = createHmac('sha256', kRegion).update(serviceName).digest();
-	const kSigning = createHmac('sha256', kService).update('aws4_request').digest();
-	return kSigning;
 }
 
 // ============================================================================

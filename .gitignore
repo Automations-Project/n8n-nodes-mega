@@ -85,3 +85,4 @@ qodana/
 /.github/README.md
 TEMPLATE_CREATION_GUIDE.md
 create-template.js
+logs

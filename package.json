@@ -1,6 +1,6 @@
 {
   "name": "@nskha/n8n-nodes-mega",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "n8n community node for Mega.nz S4 object storage (S3-compatible)",
   "keywords": [
     "n8n-community-node-package",
@@ -54,15 +54,9 @@
       "dist/nodes/Mega/Mega.node.js"
     ]
   },
-  "dependencies": {
-    "aws4": "^1.13.2",
-    "xml2js": "^0.6.2"
-  },
   "devDependencies": {
-    "@types/aws4": "^1.11.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.9",
-    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/parser": "~8.32.0",
     "chokidar": "^4.0.3",
     "concurrently": "^8.2.2",

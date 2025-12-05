@@ -1556,9 +1556,9 @@ export const iamListPoliciesFields: INodeProperties[] = [
 						description: 'All policies',
 					},
 					{
-						name: 'AWS',
-						value: 'AWS',
-						description: 'AWS managed policies only',
+						name: 'Mega',
+						value: 'Mega',
+						description: 'Mega managed policies only',
 					},
 					{
 						name: 'Local',
