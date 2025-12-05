@@ -478,7 +478,7 @@ export async function generatePresignedUrl(
 
 	// Get current timestamp
 	const now = new Date();
-	const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+	const amzDate = now.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
 	const dateStamp = amzDate.substring(0, 8);
 
 	// Build credential scope
@@ -563,6 +563,10 @@ function getSignatureKey(
 	const kSigning = createHmac('sha256', kService).update('aws4_request').digest();
 	return kSigning;
 }
+
+// ============================================================================
+// Validation Functions
+// ============================================================================
 
 /**
  * Validate bucket name according to S3/S4 rules
@@ -674,6 +678,91 @@ export function validateIAMName(
 
 	return { valid: true };
 }
+
+// ============================================================================
+// Validation Assertion Helpers (throw on invalid)
+// ============================================================================
+
+/**
+ * Assert bucket name is valid, throw NodeOperationError if not
+ */
+export function assertBucketName(
+	context: IExecuteFunctions,
+	bucketName: string,
+	itemIndex: number,
+	prefix: string = '',
+): void {
+	const validation = validateBucketName(bucketName);
+	if (!validation.valid) {
+		const label = prefix ? `${prefix} bucket name` : 'bucket name';
+		throw new NodeOperationError(
+			context.getNode(),
+			`Invalid ${label}: ${validation.error}`,
+			{ itemIndex },
+		);
+	}
+}
+
+/**
+ * Assert object key is valid, throw NodeOperationError if not
+ */
+export function assertObjectKey(
+	context: IExecuteFunctions,
+	key: string,
+	itemIndex: number,
+	prefix: string = '',
+): void {
+	const validation = validateObjectKey(key);
+	if (!validation.valid) {
+		const label = prefix ? `${prefix} object key` : 'object key';
+		throw new NodeOperationError(
+			context.getNode(),
+			`Invalid ${label}: ${validation.error}`,
+			{ itemIndex },
+		);
+	}
+}
+
+/**
+ * Assert IAM name is valid, throw NodeOperationError if not
+ */
+export function assertIAMName(
+	context: IExecuteFunctions,
+	name: string,
+	type: 'user' | 'group',
+	itemIndex: number,
+): void {
+	const validation = validateIAMName(name, type);
+	if (!validation.valid) {
+		throw new NodeOperationError(
+			context.getNode(),
+			`Invalid IAM ${type} name: ${validation.error}`,
+			{ itemIndex },
+		);
+	}
+}
+
+/**
+ * Assert policy ARN is valid, throw NodeOperationError if not
+ */
+export function assertPolicyArn(
+	context: IExecuteFunctions,
+	arn: string,
+	itemIndex: number,
+): void {
+	const validation = validatePolicyArn(arn);
+	if (!validation.valid) {
+		throw new NodeOperationError(
+			context.getNode(),
+			`Invalid policy ARN: ${validation.error}`,
+			{ itemIndex },
+		);
+	}
+}
+
+// ============================================================================
+// Binary Data Helpers
+// ============================================================================
 
 /**
  * Convert n8n binary data to Buffer for S3 upload

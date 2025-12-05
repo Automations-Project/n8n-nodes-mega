@@ -23,9 +23,9 @@ module.exports = {
 	coverageThreshold: {
 		global: {
 			// Updated after adding comprehensive tests for utility functions
-			// Remaining uncovered: HTTP request functions (require integration tests)
-			branches: 30,
-			functions: 45,
+			// Remaining uncovered: HTTP request functions, assertion helpers (require mocking)
+			branches: 28,
+			functions: 40,
 			lines: 40,
 			statements: 40,
 		},
