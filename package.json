@@ -55,14 +55,14 @@
     ]
   },
   "dependencies": {
-    "@aws-sdk/client-iam": "^3.913.0",
-    "@aws-sdk/client-s3": "^3.913.0",
-    "@aws-sdk/s3-request-presigner": "^3.913.0",
-    "@aws-sdk/types": "^3.910.0"
+    "aws4": "^1.13.2",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@types/aws4": "^1.11.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.9",
+    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/parser": "~8.32.0",
     "chokidar": "^4.0.3",
     "concurrently": "^8.2.2",

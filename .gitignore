@@ -5,6 +5,12 @@ package-lock.json
 # Build outputs
 dist
 
+# Development/planning files
+REFACTOR.md
+refactor.md
+*.md.bak
+progress.txt
+
 # Test coverage
 coverage
 *.lcov
@@ -72,3 +78,5 @@ scripts/banner.config.json
 /.github/PUBLISH_QUICK_START.md
 /.github/PUBLISHING.md
 /.github/README.md
+TEMPLATE_CREATION_GUIDE.md
+create-template.js

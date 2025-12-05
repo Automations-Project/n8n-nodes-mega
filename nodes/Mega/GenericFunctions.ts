@@ -1,14 +1,26 @@
 /**
  * Generic helper functions for Mega S4 (S3-compatible) API operations
- * Uses AWS SDK v3 for S3-compatible operations with proper authentication
+ * Uses aws4 for AWS Signature V4 signing and xml2js for XML parsing
+ * No external AWS SDK dependencies (n8n Cloud compatible)
  */
 
-import { IExecuteFunctions, IDataObject, NodeApiError, NodeOperationError } from 'n8n-workflow';
+import {
+	IExecuteFunctions,
+	IDataObject,
+	NodeApiError,
+	NodeOperationError,
+	IHttpRequestMethods,
+	IHttpRequestOptions,
+	JsonObject,
+} from 'n8n-workflow';
 import { IMegaCredentials } from './interfaces';
+import { sign } from 'aws4';
+import { parseStringPromise, Builder } from 'xml2js';
+import { createHash, createHmac } from 'crypto';
 
-// AWS SDK v3 imports - these will be added to package.json
-import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
-import { IAMClient, IAMClientConfig } from '@aws-sdk/client-iam';
+// ============================================================================
+// Endpoint Configuration
+// ============================================================================
 
 /**
  * Get region-specific S3 endpoint for Mega S4
@@ -38,112 +50,205 @@ export function getIAMEndpoint(region: string): string {
 	return endpointMap[region] || endpointMap['eu-central-1'];
 }
 
+// ============================================================================
+// Credential Helpers
+// ============================================================================
+
 /**
- * Initialize and return configured S3 client for Mega S4
+ * Get and validate Mega S4 credentials
  */
-export async function getS3Client(
-	this: IExecuteFunctions,
+export async function getMegaCredentials(
+	context: IExecuteFunctions,
 	itemIndex: number = 0,
-): Promise<S3Client> {
-	// Get credentials from n8n
-	const credentials = (await this.getCredentials('megaApi', itemIndex)) as IMegaCredentials;
+): Promise<IMegaCredentials> {
+	const credentials = (await context.getCredentials('megaApi', itemIndex)) as IMegaCredentials;
 
 	if (!credentials.accessKeyId || !credentials.secretAccessKey) {
 		throw new NodeOperationError(
-			this.getNode(),
+			context.getNode(),
 			'Mega S4 credentials are required. Please configure Access Key ID and Secret Access Key.',
 			{ itemIndex },
 		);
 	}
 
-	// Determine endpoint
-	const region = credentials.region || 'eu-central-1';
-	const endpoint = credentials.customEndpoint
-		? `https://${credentials.customEndpoint}`
-		: `https://${getS3Endpoint(region)}`;
-
-	// Configure S3 client
-	const s3Config: S3ClientConfig = {
-		region: region,
-		endpoint: endpoint,
-		credentials: {
-			accessKeyId: credentials.accessKeyId,
-			secretAccessKey: credentials.secretAccessKey,
-		},
-		forcePathStyle: credentials.forcePathStyle ?? true, // Mega S4 typically requires path style
-		// Optional: Add custom user agent
-		// customUserAgent: 'n8n-mega-s4-node/1.0.0',
+	return {
+		accessKeyId: credentials.accessKeyId,
+		secretAccessKey: credentials.secretAccessKey,
+		region: credentials.region || 'eu-central-1',
+		customEndpoint: credentials.customEndpoint,
+		forcePathStyle: credentials.forcePathStyle ?? true,
 	};
+}
 
-	return new S3Client(s3Config);
+// ============================================================================
+// S3 API Request Functions
+// ============================================================================
+
+export interface IS3RequestOptions {
+	method: IHttpRequestMethods;
+	path: string;
+	bucket?: string;
+	key?: string;
+	query?: Record<string, string>;
+	headers?: Record<string, string>;
+	body?: string | Buffer;
+	returnFullResponse?: boolean;
 }
 
 /**
- * Initialize and return configured IAM client for Mega S4
+ * Make a signed S3 API request
  */
-export async function getIAMClient(
+export async function s3ApiRequest(
 	this: IExecuteFunctions,
+	options: IS3RequestOptions,
 	itemIndex: number = 0,
-): Promise<IAMClient> {
-	// Get credentials from n8n
-	const credentials = (await this.getCredentials('megaApi', itemIndex)) as IMegaCredentials;
+): Promise<any> {
+	const credentials = await getMegaCredentials(this, itemIndex);
+	const endpoint = credentials.customEndpoint || getS3Endpoint(credentials.region);
 
-	if (!credentials.accessKeyId || !credentials.secretAccessKey) {
-		throw new NodeOperationError(
-			this.getNode(),
-			'Mega S4 credentials are required. Please configure Access Key ID and Secret Access Key.',
-			{ itemIndex },
-		);
+	// Build the path with bucket and key
+	let path = '/';
+	if (options.bucket) {
+		path = `/${options.bucket}`;
+		if (options.key) {
+			// URL encode the key, but preserve forward slashes
+			const encodedKey = options.key
+				.split('/')
+				.map((segment) => encodeURIComponent(segment))
+				.join('/');
+			path = `${path}/${encodedKey}`;
+		}
 	}
 
-	// Determine endpoint
-	const region = credentials.region || 'eu-central-1';
-	const endpoint = credentials.customEndpoint
-		? `https://${credentials.customEndpoint}`
-		: `https://${getIAMEndpoint(region)}`;
+	// Build query string
+	let queryString = '';
+	if (options.query && Object.keys(options.query).length > 0) {
+		const params = new URLSearchParams();
+		// Sort query parameters for consistent signing
+		const sortedKeys = Object.keys(options.query).sort();
+		for (const key of sortedKeys) {
+			const value = options.query[key];
+			if (value !== undefined && value !== '') {
+				params.append(key, value);
+			} else if (value === '') {
+				// For empty value params like ?acl, ?policy, etc.
+				params.append(key, '');
+			}
+		}
+		queryString = params.toString();
+	}
 
-	// Configure IAM client
-	const iamConfig: IAMClientConfig = {
-		region: region,
-		endpoint: endpoint,
-		credentials: {
+	const fullPath = queryString ? `${path}?${queryString}` : path;
+
+	// Prepare headers
+	const headers: Record<string, string> = {
+		...options.headers,
+	};
+
+	// Add content headers for body
+	if (options.body) {
+		if (Buffer.isBuffer(options.body)) {
+			headers['Content-Length'] = String(options.body.length);
+		} else if (typeof options.body === 'string') {
+			headers['Content-Length'] = String(Buffer.byteLength(options.body, 'utf8'));
+		}
+	}
+
+	// Sign the request using aws4
+	const signedRequest = sign(
+		{
+			host: endpoint,
+			path: fullPath,
+			method: options.method,
+			service: 's3',
+			region: credentials.region,
+			headers,
+			body: options.body,
+		},
+		{
 			accessKeyId: credentials.accessKeyId,
 			secretAccessKey: credentials.secretAccessKey,
 		},
+	);
+
+	// Build the full URL
+	const url = `https://${endpoint}${fullPath}`;
+
+	// Make the HTTP request
+	const requestOptions: IHttpRequestOptions = {
+		method: options.method,
+		url,
+		headers: signedRequest.headers as Record<string, string>,
+		returnFullResponse: true,
+		ignoreHttpStatusErrors: true,
+		encoding: 'arraybuffer', // Handle binary data
 	};
 
-	return new IAMClient(iamConfig);
-}
+	if (options.body) {
+		requestOptions.body = options.body;
+	}
 
-/**
- * Execute S3 command with proper error handling
- */
-export async function executeS3Command<TInput extends object, TOutput>(
-	this: IExecuteFunctions,
-	command: any, // AWS SDK Command instance
-	itemIndex: number = 0,
-): Promise<TOutput> {
 	try {
-		const s3Client = await getS3Client.call(this, itemIndex);
-		const response = await s3Client.send(command);
-		return response as TOutput;
-	} catch (error: any) {
-		// Handle S3-specific errors
-		if (error.$metadata) {
-			// AWS SDK v3 error structure
-			const statusCode = error.$metadata.httpStatusCode || 500;
-			const errorCode = error.Code || error.name || 'UnknownError';
-			const errorMessage = error.message || 'An unknown error occurred';
+		const response = await this.helpers.httpRequest(requestOptions);
 
-			throw new NodeApiError(this.getNode(), error, {
-				message: `S3 API Error (${errorCode}): ${errorMessage}`,
-				description: `Status: ${statusCode}. ${errorMessage}`,
-				httpCode: String(statusCode),
-				itemIndex,
-			});
+		// Handle error responses
+		if (response.statusCode >= 400) {
+			const errorBody = Buffer.isBuffer(response.body)
+				? response.body.toString('utf8')
+				: String(response.body);
+			
+			let errorInfo: { code: string; message: string } = {
+				code: 'UnknownError',
+				message: errorBody || `HTTP ${response.statusCode}`,
+			};
+
+			// Try to parse XML error
+			if (errorBody && errorBody.includes('<Error>')) {
+				try {
+					const parsed = await parseXmlResponse(errorBody);
+					if (parsed.Error) {
+						errorInfo = {
+							code: parsed.Error.Code || 'UnknownError',
+							message: parsed.Error.Message || errorBody,
+						};
+					}
+				} catch {
+					// Keep default error info
+				}
+			}
+
+			throw new NodeApiError(
+				this.getNode(),
+				{ message: errorInfo.message } as JsonObject,
+				{
+					message: `S3 API Error (${errorInfo.code}): ${errorInfo.message}`,
+					httpCode: String(response.statusCode),
+					itemIndex,
+				},
+			);
 		}
 
-		// Generic error
+		// Return based on returnFullResponse option
+		if (options.returnFullResponse) {
+			return response;
+		}
+
+		// Parse response body
+		const body = Buffer.isBuffer(response.body)
+			? response.body.toString('utf8')
+			: String(response.body || '');
+
+		// If body looks like XML, parse it
+		if (body && body.trim().startsWith('<?xml') || body.trim().startsWith('<')) {
+			return await parseXmlResponse(body);
+		}
+
+		return body;
+	} catch (error: any) {
+		if (error instanceof NodeApiError) {
+			throw error;
+		}
+
 		throw new NodeOperationError(
 			this.getNode(),
 			`Mega S4 operation failed: ${error.message}`,
@@ -156,34 +261,144 @@ export async function executeS3Command<TInput extends object, TOutput>(
 }
 
 /**
- * Execute IAM command with proper error handling
+ * Make a signed S3 API request and return raw response (for binary data)
  */
-export async function executeIAMCommand<TInput extends object, TOutput>(
+export async function s3ApiRequestRaw(
 	this: IExecuteFunctions,
-	command: any, // AWS SDK Command instance
+	options: IS3RequestOptions,
 	itemIndex: number = 0,
-): Promise<TOutput> {
-	try {
-		const iamClient = await getIAMClient.call(this, itemIndex);
-		const response = await iamClient.send(command);
-		return response as TOutput;
-	} catch (error: any) {
-		// Handle IAM-specific errors
-		if (error.$metadata) {
-			// AWS SDK v3 error structure
-			const statusCode = error.$metadata.httpStatusCode || 500;
-			const errorCode = error.Code || error.name || 'UnknownError';
-			const errorMessage = error.message || 'An unknown error occurred';
+): Promise<{ body: Buffer; headers: Record<string, string>; statusCode: number }> {
+	const response = await s3ApiRequest.call(
+		this,
+		{ ...options, returnFullResponse: true },
+		itemIndex,
+	);
 
-			throw new NodeApiError(this.getNode(), error, {
-				message: `IAM API Error (${errorCode}): ${errorMessage}`,
-				description: `Status: ${statusCode}. ${errorMessage}`,
-				httpCode: String(statusCode),
-				itemIndex,
-			});
+	return {
+		body: Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.body || ''),
+		headers: response.headers || {},
+		statusCode: response.statusCode,
+	};
+}
+
+// ============================================================================
+// IAM API Request Functions
+// ============================================================================
+
+export interface IIAMRequestOptions {
+	action: string;
+	params?: Record<string, string>;
+	version?: string;
+}
+
+/**
+ * Make a signed IAM API request
+ */
+export async function iamApiRequest(
+	this: IExecuteFunctions,
+	options: IIAMRequestOptions,
+	itemIndex: number = 0,
+): Promise<any> {
+	const credentials = await getMegaCredentials(this, itemIndex);
+	const endpoint = getIAMEndpoint(credentials.region);
+
+	// Build form data
+	const formParams = new URLSearchParams();
+	formParams.append('Action', options.action);
+	formParams.append('Version', options.version || '2010-05-08');
+
+	if (options.params) {
+		for (const [key, value] of Object.entries(options.params)) {
+			if (value !== undefined) {
+				formParams.append(key, value);
+			}
+		}
+	}
+
+	const body = formParams.toString();
+
+	// Prepare headers
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+		'Content-Length': String(Buffer.byteLength(body, 'utf8')),
+	};
+
+	// Sign the request using aws4
+	const signedRequest = sign(
+		{
+			host: endpoint,
+			path: '/',
+			method: 'POST',
+			service: 'iam',
+			region: credentials.region,
+			headers,
+			body,
+		},
+		{
+			accessKeyId: credentials.accessKeyId,
+			secretAccessKey: credentials.secretAccessKey,
+		},
+	);
+
+	// Build the full URL
+	const url = `https://${endpoint}/`;
+
+	// Make the HTTP request
+	const requestOptions: IHttpRequestOptions = {
+		method: 'POST',
+		url,
+		headers: signedRequest.headers as Record<string, string>,
+		body,
+		returnFullResponse: true,
+		ignoreHttpStatusErrors: true,
+	};
+
+	try {
+		const response = await this.helpers.httpRequest(requestOptions);
+
+		// Handle error responses
+		if (response.statusCode >= 400) {
+			const errorBody = typeof response.body === 'string' ? response.body : String(response.body || '');
+			
+			let errorInfo: { code: string; message: string } = {
+				code: 'UnknownError',
+				message: errorBody || `HTTP ${response.statusCode}`,
+			};
+
+			// Try to parse XML error
+			if (errorBody && errorBody.includes('<Error>')) {
+				try {
+					const parsed = await parseXmlResponse(errorBody);
+					if (parsed.ErrorResponse?.Error) {
+						errorInfo = {
+							code: parsed.ErrorResponse.Error.Code || 'UnknownError',
+							message: parsed.ErrorResponse.Error.Message || errorBody,
+						};
+					}
+				} catch {
+					// Keep default error info
+				}
+			}
+
+			throw new NodeApiError(
+				this.getNode(),
+				{ message: errorInfo.message } as JsonObject,
+				{
+					message: `IAM API Error (${errorInfo.code}): ${errorInfo.message}`,
+					httpCode: String(response.statusCode),
+					itemIndex,
+				},
+			);
 		}
 
-		// Generic error
+		// Parse XML response
+		const body_str = typeof response.body === 'string' ? response.body : String(response.body || '');
+		return await parseXmlResponse(body_str);
+	} catch (error: any) {
+		if (error instanceof NodeApiError) {
+			throw error;
+		}
+
 		throw new NodeOperationError(
 			this.getNode(),
 			`Mega S4 IAM operation failed: ${error.message}`,
@@ -193,6 +408,160 @@ export async function executeIAMCommand<TInput extends object, TOutput>(
 			},
 		);
 	}
+}
+
+// ============================================================================
+// XML Parsing Functions
+// ============================================================================
+
+/**
+ * Parse XML response to JavaScript object
+ */
+export async function parseXmlResponse(xml: string): Promise<any> {
+	if (!xml || xml.trim() === '') {
+		return {};
+	}
+
+	try {
+		const result = await parseStringPromise(xml, {
+			explicitArray: false,
+			ignoreAttrs: true,
+			tagNameProcessors: [(name: string) => name],
+		});
+		return result;
+	} catch (error: any) {
+		throw new Error(`Failed to parse XML response: ${error.message}`);
+	}
+}
+
+/**
+ * Build XML from JavaScript object
+ */
+export function buildXml(obj: any, rootName: string = 'root'): string {
+	const builder = new Builder({
+		rootName,
+		headless: false,
+		renderOpts: { pretty: false },
+	});
+	return builder.buildObject(obj);
+}
+
+// ============================================================================
+// Presigned URL Generation
+// ============================================================================
+
+/**
+ * Generate a presigned URL for S3 operations
+ */
+export async function generatePresignedUrl(
+	this: IExecuteFunctions,
+	options: {
+		bucket: string;
+		key: string;
+		method: 'GET' | 'PUT';
+		expiresIn: number; // seconds
+		contentType?: string;
+	},
+	itemIndex: number = 0,
+): Promise<string> {
+	const credentials = await getMegaCredentials(this, itemIndex);
+	const endpoint = credentials.customEndpoint || getS3Endpoint(credentials.region);
+	const region = credentials.region;
+
+	// URL encode the key, preserving forward slashes
+	const encodedKey = options.key
+		.split('/')
+		.map((segment) => encodeURIComponent(segment))
+		.join('/');
+
+	const path = `/${options.bucket}/${encodedKey}`;
+
+	// Get current timestamp
+	const now = new Date();
+	const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+	const dateStamp = amzDate.substring(0, 8);
+
+	// Build credential scope
+	const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+	const credential = `${credentials.accessKeyId}/${credentialScope}`;
+
+	// Build signed headers
+	const signedHeaders = 'host';
+
+	// Build canonical query string
+	const queryParams: Record<string, string> = {
+		'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+		'X-Amz-Credential': credential,
+		'X-Amz-Date': amzDate,
+		'X-Amz-Expires': String(options.expiresIn),
+		'X-Amz-SignedHeaders': signedHeaders,
+	};
+
+	if (options.method === 'PUT' && options.contentType) {
+		queryParams['Content-Type'] = options.contentType;
+	}
+
+	// Sort and encode query parameters
+	const sortedKeys = Object.keys(queryParams).sort();
+	const canonicalQueryString = sortedKeys
+		.map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
+		.join('&');
+
+	// Build canonical request
+	const canonicalHeaders = `host:${endpoint}\n`;
+	const payloadHash = 'UNSIGNED-PAYLOAD';
+
+	const canonicalRequest = [
+		options.method,
+		path,
+		canonicalQueryString,
+		canonicalHeaders,
+		signedHeaders,
+		payloadHash,
+	].join('\n');
+
+	// Build string to sign
+	const canonicalRequestHash = createHash('sha256').update(canonicalRequest).digest('hex');
+	const stringToSign = [
+		'AWS4-HMAC-SHA256',
+		amzDate,
+		credentialScope,
+		canonicalRequestHash,
+	].join('\n');
+
+	// Calculate signature
+	const signingKey = getSignatureKey(
+		credentials.secretAccessKey,
+		dateStamp,
+		region,
+		's3',
+	);
+	const signature = createHmac('sha256', signingKey)
+		.update(stringToSign)
+		.digest('hex');
+
+	// Build final URL
+	const presignedUrl = `https://${endpoint}${path}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
+
+	return presignedUrl;
+}
+
+/**
+ * Generate AWS4 signing key
+ */
+function getSignatureKey(
+	secretKey: string,
+	dateStamp: string,
+	regionName: string,
+	serviceName: string,
+): Buffer {
+	const kDate = createHmac('sha256', `AWS4${secretKey}`)
+		.update(dateStamp)
+		.digest();
+	const kRegion = createHmac('sha256', kDate).update(regionName).digest();
+	const kService = createHmac('sha256', kRegion).update(serviceName).digest();
+	const kSigning = createHmac('sha256', kService).update('aws4_request').digest();
+	return kSigning;
 }
 
 /**

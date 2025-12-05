@@ -3,11 +3,18 @@ import {
 	INodeProperties,
 } from 'n8n-workflow';
 
+/**
+ * Mega S4 API Credentials
+ * 
+ * Uses AWS Signature Version 4 authentication for S3-compatible storage.
+ * Credentials are validated when the node first executes an operation.
+ */
 export class MegaApi implements ICredentialType {
 	name = 'megaApi';
 	displayName = 'Mega S4 API';
 	icon = 'file:mega.svg' as const;
 	documentationUrl = 'https://mega.io/s4';
+
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Access Key ID',
@@ -69,21 +76,4 @@ export class MegaApi implements ICredentialType {
 			description: 'Whether to force path-style URLs (bucket in path vs subdomain). Mega S4 typically requires this.',
 		},
 	];
-
-	/**
-	 * Note on Credential Testing:
-	 * 
-	 * AWS Signature V4 authentication (used by Mega S4) is complex and requires
-	 * the AWS SDK to properly sign requests. n8n's simple credential test mechanism
-	 * (using ICredentialTestRequest with static headers) cannot handle this complexity.
-	 * 
-	 * Instead, credential validation happens when the node first executes an operation.
-	 * If credentials are invalid, the AWS SDK will return clear error messages like:
-	 * - "The AWS Access Key Id you provided does not exist in our records"
-	 * - "SignatureDoesNotMatch: The request signature we calculated does not match"
-	 * - "InvalidAccessKeyId: The Access Key ID provided does not exist"
-	 * 
-	 * This is the standard approach for S3-compatible services in n8n.
-	 * The user will receive immediate, actionable feedback on their first operation attempt.
-	 */
 }
