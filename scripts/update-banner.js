@@ -272,7 +272,12 @@ function bumpPrerelease(version, tag = 'beta') {
       throw new Error('global fetch is not available. Use Node >= 18.17.0');
     }
 
-    const res = await fetch(url, { method: 'GET' });
+    const res = await fetch(url, { 
+      method: 'GET',
+      headers: {
+        'User-Agent': 'n8n-banner-bot'
+      }
+    });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`Banner API request failed: ${res.status} ${res.statusText}\n${text}`);
