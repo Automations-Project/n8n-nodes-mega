@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Skip publish (manual only)
-        run: echo "Publish workflow runs only via manual dispatch (workflow_dispatch). Skipping for event: ${{ github.event_name }}."
+        run: echo "Publish workflow is manual-only. Skipped."
 
   validate:
     name: Validate & Prepare
