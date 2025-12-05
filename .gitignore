@@ -15,8 +15,8 @@ progress.txt
 coverage
 *.lcov
 
-# Scripts (local development tools)
-scripts/
+# Scripts - only ignore local-only files
+# scripts/banner.config is tracked (display settings for banner generation)
 
 # IDE & Editor files
 .vscode/
