@@ -15,6 +15,9 @@ progress.txt
 coverage
 *.lcov
 
+# Scripts (local development tools)
+scripts/
+
 # IDE & Editor files
 .vscode/
 .vscode
@@ -73,8 +76,10 @@ DEV-WORKFLOW.md
 
 # Environment variables (contains sensitive API endpoints)
 .env
-scripts/banner.config
-scripts/banner.config.json
+
+# Qodana reports (auto-generated)
+*.sarif.json
+qodana/
 /.github/PUBLISH_QUICK_START.md
 /.github/PUBLISHING.md
 /.github/README.md

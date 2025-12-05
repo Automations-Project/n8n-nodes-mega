@@ -133,6 +133,20 @@ jobs:
 
           echo "✅ Package structure validated for n8n community node"
 
+      - name: Update README banner
+        if: ${{ secrets.BANNER_API_BASE_URL != '' }}
+        run: |
+          echo "📸 Regenerating banner with version ${{ steps.version.outputs.new-version }}..."
+          npm run update:banner || echo "⚠️ Banner update failed (non-blocking)"
+          if [ -f "intro.png" ]; then
+            git add intro.png
+            git diff --cached --quiet || git commit -m "chore: update banner for v${{ steps.version.outputs.new-version }}"
+            echo "✅ Banner updated"
+          fi
+        env:
+          BANNER_API_BASE_URL: ${{ secrets.BANNER_API_BASE_URL }}
+        continue-on-error: true
+
       - name: Build package
         run: pnpm run build
 

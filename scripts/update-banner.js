@@ -55,8 +55,9 @@ function loadEnv() {
 loadEnv();
 
 /**
- * Auto-detect the latest published version on NPM and auto-increment it.
- * Returns the next version to display in the banner.
+ * Get version for banner display.
+ * Priority: config.version > package.json version
+ * No auto-bump - uses exact version from package.json (set by publish workflow)
  */
 function getNextVersion(pkg, config) {
   try {
@@ -66,41 +67,12 @@ function getNextVersion(pkg, config) {
       return config.version;
     }
 
-    const packageName = config.packageName || pkg.name;
-    if (!packageName) {
-      console.warn('[update-banner] No package name found, using version from package.json');
-      return pkg.version || '1.0.0';
-    }
-
-    console.log(`[update-banner] Checking NPM for latest version of ${packageName}...`);
-    
-    // Check NPM for latest published version
-    let npmVersion;
-    try {
-      const result = execSync(`npm view ${packageName} version`, { 
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe']
-      }).trim();
-      npmVersion = result || pkg.version;
-    } catch (err) {
-      // Package not published yet or error
-      console.log('[update-banner] Package not found on NPM, using package.json version');
-      npmVersion = pkg.version || '1.0.0';
-    }
-
-    console.log(`[update-banner] Latest published: ${npmVersion}`);
-    console.log(`[update-banner] Package.json: ${pkg.version}`);
-
-    // Use the higher version (NPM or package.json)
-    const useVersion = compareVersions(npmVersion, pkg.version) > 0 ? npmVersion : pkg.version;
-    
-    // Auto-increment prerelease
-    const nextVersion = bumpPrerelease(useVersion, 'beta');
-    console.log(`[update-banner] Next version for banner: ${nextVersion}`);
-    
-    return nextVersion;
+    // Use package.json version directly (set by publish workflow)
+    const version = pkg.version || '1.0.0';
+    console.log(`[update-banner] Using version from package.json: ${version}`);
+    return version;
   } catch (err) {
-    console.warn(`[update-banner] Error auto-bumping version: ${err.message}`);
+    console.warn(`[update-banner] Error getting version: ${err.message}`);
     return pkg.version || '1.0.0';
   }
 }
@@ -206,7 +178,7 @@ function bumpPrerelease(version, tag = 'beta') {
     const status = config.status || 'Stable';
 
     // Use package name only (no local paths or hostnames)
-    const installCommand = config.installCommand || `npm install ${packageName}`.replace(/\\|\/[^\s]+\/node_modules/g, '');
+    const installCommand = config.installCommand || `npm install ${packageName}`.replace(/\\|\/\S+\/node_modules/g, '');
     const repoUrl = config.repoUrl || (owner && repo ? `github.com/${owner}/${repo}` : '');
     const ogImage = config.ogImage || '';
 
@@ -327,7 +299,7 @@ function bumpPrerelease(version, tag = 'beta') {
     const readmePath = path.join(root, 'README.md');
     if (fs.existsSync(readmePath)) {
       const md = fs.readFileSync(readmePath, 'utf8');
-      if (!/\!\[.*?\]\((\.?\/)?intro\.png\)/i.test(md)) {
+      if (!/!\[.*?]\((\.?\/)?intro\.png\)/i.test(md)) {
         console.warn('[update-banner] README.md does not reference intro.png. Please update the banner image link if needed.');
       }
     }

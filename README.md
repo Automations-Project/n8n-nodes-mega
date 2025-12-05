@@ -44,7 +44,7 @@ This is an n8n community node for **Mega.nz S4** object storage service. It prov
 - **Copy Object** - Copy objects between buckets or within the same bucket
 
 ### ✨ Advanced Features
-- ✅ AWS SDK v3 for reliable S3-compatible operations
+- ✅ Native HTTP client with AWS Signature V4 (n8n Cloud compatible)
 - ✅ Multiple region support (Amsterdam, Luxembourg, Montreal, Vancouver)
 - ✅ Binary data handling for file uploads/downloads
 - ✅ Pagination for large object lists
