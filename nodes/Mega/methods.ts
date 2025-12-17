@@ -396,6 +396,7 @@ export async function handlePutObject(
 
 /**
  * Download an object (Get)
+ * Supports conditional headers: If-Match, If-None-Match, If-Modified-Since, If-Unmodified-Since (S4 v2.14.0+)
  */
 export async function handleGetObject(
 	this: IExecuteFunctions,
@@ -404,6 +405,12 @@ export async function handleGetObject(
 	const bucketName = this.getNodeParameter('bucketName', itemIndex) as string;
 	const objectKey = this.getNodeParameter('objectKey', itemIndex) as string;
 	const binaryPropertyName = this.getNodeParameter('binaryPropertyName', itemIndex, 'data') as string;
+	const conditionalHeaders = this.getNodeParameter('conditionalHeaders', itemIndex, {}) as {
+		ifMatch?: string;
+		ifNoneMatch?: string;
+		ifModifiedSince?: string;
+		ifUnmodifiedSince?: string;
+	};
 
 	// Validate bucket and key
 	const bucketValidation = validateBucketName(bucketName);
@@ -424,11 +431,48 @@ export async function handleGetObject(
 		);
 	}
 
+	// Build conditional request headers (S4 v2.14.0+)
+	const headers: Record<string, string> = {};
+	if (conditionalHeaders.ifMatch) {
+		headers['If-Match'] = conditionalHeaders.ifMatch;
+	}
+	if (conditionalHeaders.ifNoneMatch) {
+		headers['If-None-Match'] = conditionalHeaders.ifNoneMatch;
+	}
+	if (conditionalHeaders.ifModifiedSince) {
+		headers['If-Modified-Since'] = new Date(conditionalHeaders.ifModifiedSince).toUTCString();
+	}
+	if (conditionalHeaders.ifUnmodifiedSince) {
+		headers['If-Unmodified-Since'] = new Date(conditionalHeaders.ifUnmodifiedSince).toUTCString();
+	}
+
 	const response = await s3ApiRequestRaw.call(
 		this,
-		{ method: 'GET', bucket: bucketName, key: objectKey, path: '' },
+		{
+			method: 'GET',
+			bucket: bucketName,
+			key: objectKey,
+			path: '',
+			headers: Object.keys(headers).length > 0 ? headers : undefined,
+		},
 		itemIndex,
 	);
+
+	// Handle 304 Not Modified response (conditional request not satisfied)
+	if (response.statusCode === 304) {
+		return {
+			json: {
+				bucketName,
+				objectKey,
+				notModified: true,
+				statusCode: 304,
+				message: 'Object has not been modified since the specified condition',
+				etag: response.headers['etag']?.replace(/"/g, ''),
+				lastModified: response.headers['last-modified'],
+			},
+			pairedItem: { item: itemIndex },
+		};
+	}
 
 	// Extract filename from key (last part after /)
 	const fileName = objectKey.split('/').pop() || objectKey;
@@ -613,6 +657,7 @@ export async function handleDeleteMultipleObjects(
 
 /**
  * Get object metadata without downloading (Head)
+ * Supports conditional headers: If-Match, If-None-Match, If-Modified-Since, If-Unmodified-Since (S4 v2.14.0+)
  */
 export async function handleHeadObject(
 	this: IExecuteFunctions,
@@ -620,6 +665,12 @@ export async function handleHeadObject(
 ): Promise<INodeExecutionData> {
 	const bucketName = this.getNodeParameter('bucketName', itemIndex) as string;
 	const objectKey = this.getNodeParameter('objectKey', itemIndex) as string;
+	const conditionalHeaders = this.getNodeParameter('conditionalHeaders', itemIndex, {}) as {
+		ifMatch?: string;
+		ifNoneMatch?: string;
+		ifModifiedSince?: string;
+		ifUnmodifiedSince?: string;
+	};
 
 	// Validate bucket and key
 	const bucketValidation = validateBucketName(bucketName);
@@ -640,11 +691,48 @@ export async function handleHeadObject(
 		);
 	}
 
+	// Build conditional request headers (S4 v2.14.0+)
+	const headers: Record<string, string> = {};
+	if (conditionalHeaders.ifMatch) {
+		headers['If-Match'] = conditionalHeaders.ifMatch;
+	}
+	if (conditionalHeaders.ifNoneMatch) {
+		headers['If-None-Match'] = conditionalHeaders.ifNoneMatch;
+	}
+	if (conditionalHeaders.ifModifiedSince) {
+		headers['If-Modified-Since'] = new Date(conditionalHeaders.ifModifiedSince).toUTCString();
+	}
+	if (conditionalHeaders.ifUnmodifiedSince) {
+		headers['If-Unmodified-Since'] = new Date(conditionalHeaders.ifUnmodifiedSince).toUTCString();
+	}
+
 	const response = await s3ApiRequestRaw.call(
 		this,
-		{ method: 'HEAD', bucket: bucketName, key: objectKey, path: '' },
+		{
+			method: 'HEAD',
+			bucket: bucketName,
+			key: objectKey,
+			path: '',
+			headers: Object.keys(headers).length > 0 ? headers : undefined,
+		},
 		itemIndex,
 	);
+
+	// Handle 304 Not Modified response (conditional request not satisfied)
+	if (response.statusCode === 304) {
+		return {
+			json: {
+				bucketName,
+				objectKey,
+				notModified: true,
+				statusCode: 304,
+				message: 'Object has not been modified since the specified condition',
+				etag: response.headers['etag']?.replace(/"/g, ''),
+				lastModified: response.headers['last-modified'],
+			},
+			pairedItem: { item: itemIndex },
+		};
+	}
 
 	const contentType = response.headers['content-type'];
 	const contentLength = response.headers['content-length'];

@@ -475,7 +475,33 @@ export async function s3ApiRequest(
 	try {
 		const response = await this.helpers.httpRequest(requestOptions);
 
-		// Handle error responses
+		// Handle 304 Not Modified - This is a valid response for conditional requests (S4 v2.14.0+)
+		// Return the response as-is so handlers can process it appropriately
+		if (response.statusCode === 304) {
+			if (options.returnFullResponse) {
+				return response;
+			}
+			return {
+				notModified: true,
+				statusCode: 304,
+				message: 'Object has not been modified since the specified condition',
+			};
+		}
+
+		// Handle 412 Precondition Failed - Conditional request failed (S4 v2.14.0+)
+		if (response.statusCode === 412) {
+			throw new NodeApiError(
+				this.getNode(),
+				{ message: 'Precondition failed' } as JsonObject,
+				{
+					message: 'S3 API Error (PreconditionFailed): The specified precondition (If-Match or If-Unmodified-Since) was not met. The object has been modified.',
+					httpCode: '412',
+					itemIndex,
+				},
+			);
+		}
+
+		// Handle other error responses
 		if (response.statusCode >= 400) {
 			const errorBody = Buffer.isBuffer(response.body)
 				? response.body.toString('utf8')

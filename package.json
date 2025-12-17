@@ -1,6 +1,6 @@
 {
   "name": "@nskha/n8n-nodes-mega",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "n8n community node for Mega.nz S4 object storage (S3-compatible)",
   "keywords": [
     "n8n-community-node-package",
@@ -40,7 +40,8 @@
     "force-reload": "node scripts/force-reload.js",
     "stop": "pm2 delete n8n-dev || true",
     "update:banner": "node scripts/update-banner.js",
-    "setup:banner-hook": "node scripts/install-pre-commit-banner.js"
+    "setup:banner-hook": "node scripts/install-pre-commit-banner.js",
+    "create-node": "node scripts/create-node.js"
   },
   "files": [
     "dist"

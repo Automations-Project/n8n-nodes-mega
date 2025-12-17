@@ -14,6 +14,7 @@ progress.txt
 # Test coverage
 coverage
 *.lcov
+.agent
 
 # Scripts - only ignore local-only files
 # scripts/banner.config is tracked (display settings for banner generation)
@@ -86,3 +87,4 @@ qodana/
 TEMPLATE_CREATION_GUIDE.md
 create-template.js
 logs
+scripts/create-node.js

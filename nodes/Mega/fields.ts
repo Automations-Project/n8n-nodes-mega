@@ -390,6 +390,52 @@ export const objectGetFields: INodeProperties[] = [
 		default: 'data',
 		description: 'Name of the binary property to store the downloaded file',
 	},
+	{
+		displayName: 'Conditional Headers',
+		name: 'conditionalHeaders',
+		type: 'collection',
+		placeholder: 'Add Conditional Header',
+		displayOptions: {
+			show: {
+				resource: ['object'],
+				operation: ['get'],
+			},
+		},
+		default: {},
+		description: 'Optional headers for conditional requests (S4 v2.14.0+)',
+		options: [
+			{
+				displayName: 'If-Match',
+				name: 'ifMatch',
+				type: 'string',
+				default: '',
+				placeholder: '"etag-value"',
+				description: 'Return object only if its ETag matches this value. Use for cache validation.',
+			},
+			{
+				displayName: 'If-None-Match',
+				name: 'ifNoneMatch',
+				type: 'string',
+				default: '',
+				placeholder: '"etag-value"',
+				description: 'Return object only if its ETag does NOT match this value. Returns 304 if matched.',
+			},
+			{
+				displayName: 'If-Modified-Since',
+				name: 'ifModifiedSince',
+				type: 'dateTime',
+				default: '',
+				description: 'Return object only if it has been modified after this date. Returns 304 if not modified.',
+			},
+			{
+				displayName: 'If-Unmodified-Since',
+				name: 'ifUnmodifiedSince',
+				type: 'dateTime',
+				default: '',
+				description: 'Return object only if it has NOT been modified after this date. Returns 412 if modified. (New in S4 v2.14.0)',
+			},
+		],
+	},
 ];
 
 /**
@@ -523,6 +569,52 @@ export const objectHeadFields: INodeProperties[] = [
 		default: '',
 		placeholder: 'folder/file.txt',
 		description: 'Key (path/name) of the object to get metadata for',
+	},
+	{
+		displayName: 'Conditional Headers',
+		name: 'conditionalHeaders',
+		type: 'collection',
+		placeholder: 'Add Conditional Header',
+		displayOptions: {
+			show: {
+				resource: ['object'],
+				operation: ['head'],
+			},
+		},
+		default: {},
+		description: 'Optional headers for conditional requests (S4 v2.14.0+)',
+		options: [
+			{
+				displayName: 'If-Match',
+				name: 'ifMatch',
+				type: 'string',
+				default: '',
+				placeholder: '"etag-value"',
+				description: 'Return metadata only if object ETag matches this value. Use for cache validation.',
+			},
+			{
+				displayName: 'If-None-Match',
+				name: 'ifNoneMatch',
+				type: 'string',
+				default: '',
+				placeholder: '"etag-value"',
+				description: 'Return metadata only if object ETag does NOT match this value. Returns 304 if matched.',
+			},
+			{
+				displayName: 'If-Modified-Since',
+				name: 'ifModifiedSince',
+				type: 'dateTime',
+				default: '',
+				description: 'Return metadata only if object has been modified after this date. Returns 304 if not modified.',
+			},
+			{
+				displayName: 'If-Unmodified-Since',
+				name: 'ifUnmodifiedSince',
+				type: 'dateTime',
+				default: '',
+				description: 'Return metadata only if object has NOT been modified after this date. Returns 412 if modified. (New in S4 v2.14.0)',
+			},
+		],
 	},
 ];
 
